@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>DSEX Index Chart</title>
+</head>
+<body>
+    <h1>DSEX Index Chart</h1>
+    <button onclick="fetchDSEX()">Load Latest DSEX Data</button>
+
+    <div id="chart-container">
+        <img id="chart-img" src="" alt="Chart will appear here">
+        <p id="status"></p>
+        <p id="value"></p>
+    </div>
+
+    <script>
+        async function fetchDSEX() {
+            const response = await fetch("/market/scrape/");
+            const data = await response.json();
+
+            document.getElementById('chart-img').src = "data:image/png;base64," + data.chart_base64;
+            document.getElementById('status').innerText = "Market Status: " + data.status;
+            document.getElementById('value').innerText = "Current Value: " + data.value;
+        }
+    </script>
+</body>
+</html>
