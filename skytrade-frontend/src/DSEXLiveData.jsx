@@ -1,139 +1,143 @@
-// DSEXLiveTable.jsx
 import React, { useEffect, useState } from "react";
+import { Sparklines, SparklinesLine } from "react-sparklines";
 
-const DSEXLiveTable = () => {
-  const [instrumentData, setInstrumentData] = useState({});
-  const [wsStatus, setWsStatus] = useState("Connecting...");
-  const [search, setSearch] = useState("");
-  const [sortConfig, setSortConfig] = useState({ key: "fn", direction: "asc" });
+const DSEXLiveData = () => {
+  const [liveData, setLiveData] = useState([]);
+
+  const columns = [
+    "short name",
+    "share type",
+    "group",
+    "bid",
+    "bid qty",
+    "ask qty",
+    "ask",
+    "last",
+    "volume",
+    "D%",
+    "Board",
+    "full name",
+    "sector",
+    "Ticker",
+    "trend", // We'll render a sparkline here
+    "ISIN code",
+    "Instrument type",
+    "last qty",
+    "L.T time",
+    "settle-1",
+    "chg",
+    "Turnover",
+    "open",
+    "high",
+    "low",
+    "close",
+  ];
 
   useEffect(() => {
-    const socket = new WebSocket("wss://itch.skytrade.us/socket-api/v1/marketfeed/ws");
+    let socket;
+    let reconnectTimeout;
 
-    socket.onopen = () => setWsStatus("Connected");
+    const connectWebSocket = () => {
+      socket = new WebSocket(
+        "wss://itch.skytrade.us/socket-api/v1/marketfeed/ws"
+      );
 
-    socket.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        if (msg.ic) {
-          const key = msg.ic;
-          setInstrumentData(prev => {
-            const oldData = prev[key] || {};
-            return {
-              ...prev,
-              [key]: { ...oldData, ...msg }
-            };
+      socket.onopen = () => {
+        console.log("✅ WebSocket Connected: DSEXLiveData");
+        clearTimeout(reconnectTimeout);
+        socket.send(JSON.stringify({ type: "subscribe", symbols: ["DSEX"] }));
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+
+          setLiveData((prev) => {
+            const newData = [...prev];
+            const index = newData.findIndex((d) => d.Ticker === msg.Ticker);
+
+            // Keep track of last prices for sparkline
+            const prevTrend = index > -1 ? newData[index].trend || [] : [];
+
+            const newTrend = [...prevTrend, msg.last].slice(-20); // last 20 prices
+
+            if (index > -1)
+              newData[index] = { ...newData[index], ...msg, prevLast: newData[index].last, trend: newTrend };
+            else newData.push({ ...msg, prevLast: null, trend: newTrend });
+
+            return newData;
           });
+        } catch (err) {
+          console.error("❌ Parsing error:", err);
         }
-      } catch (err) {
-        console.error("Invalid JSON:", err);
-      }
+      };
+
+      socket.onerror = (err) => console.warn("⚠️ WebSocket Error:", err);
+      socket.onclose = () => {
+        console.warn("⚠️ WebSocket Closed. Reconnecting in 3s...");
+        reconnectTimeout = setTimeout(connectWebSocket, 3000);
+      };
     };
 
-    socket.onclose = () => setWsStatus("Disconnected");
-    socket.onerror = () => setWsStatus("Error");
-
-    return () => socket.close();
+    connectWebSocket();
+    return () => {
+      if (socket) socket.close();
+      clearTimeout(reconnectTimeout);
+    };
   }, []);
 
-  const filteredInstruments = Object.values(instrumentData).filter((data) =>
-    data.fn.toLowerCase().includes(search.toLowerCase()) ||
-    data.ic.toLowerCase().includes(search.toLowerCase()) ||
-    data.sn.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const sortedInstruments = filteredInstruments.sort((a, b) => {
-    const { key, direction } = sortConfig;
-    if (!a[key]) return 1;
-    if (!b[key]) return -1;
-    if (a[key] < b[key]) return direction === "asc" ? -1 : 1;
-    if (a[key] > b[key]) return direction === "asc" ? 1 : -1;
-    return 0;
-  });
-
-  const handleSort = (key) => {
-    setSortConfig(prev => ({
-      key,
-      direction: prev.key === key && prev.direction === "asc" ? "desc" : "asc"
-    }));
+  const getPriceColor = (d) => {
+    if (d.prevLast === null) return "text-white";
+    return d.last > d.prevLast ? "text-green-400" : d.last < d.prevLast ? "text-red-400" : "text-white";
   };
-
-  // Color functions
-  const priceColor = (data) => {
-    if (data.d > 0) return "#00b894";
-    if (data.d < 0) return "#d63031";
-    return "#2d3436";
-  };
-
-  const volumeColor = (v) => v > 500000 ? "#fdcb6e" : "#636e72";
-
-  const barStyle = (value, max = 1000000) => ({
-    width: `${Math.min((value / max) * 100, 100)}%`,
-    height: "8px",
-    backgroundColor: "#0984e3",
-  });
-
-  const askBarStyle = (value, max = 1000000) => ({
-    width: `${Math.min((value / max) * 100, 100)}%`,
-    height: "8px",
-    backgroundColor: "#d63031",
-  });
 
   return (
-    <div style={{ padding: "20px" }}>
-      <h2>DSEX Live Table</h2>
-      <p>Status: {wsStatus}</p>
-
-      <input
-        type="text"
-        placeholder="Search instrument by name, symbol or code"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        style={{ width: "100%", padding: "8px", marginBottom: "20px" }}
-      />
-
-      <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center" }}>
+    <div className="w-full max-w-7xl mx-auto my-6 p-6 bg-gray-800 rounded-2xl shadow-2xl overflow-x-auto">
+      <h2 className="text-3xl text-white text-center mb-4">📡 Live Market Data</h2>
+      <table className="w-full text-left border-collapse table-auto">
         <thead>
-          <tr>
-            {["fn", "ic", "lp", "v", "vw", "bp", "bq", "ak", "aq", "d", "cg"].map((key) => (
-              <th
-                key={key}
-                onClick={() => handleSort(key)}
-                style={{ border: "1px solid #ccc", padding: "8px", cursor: "pointer" }}
-              >
-                {key.toUpperCase()} {sortConfig.key === key ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}
-              </th>
+          <tr className="text-gray-300 border-b border-gray-600">
+            {columns.map((col) => (
+              <th key={col} className="px-4 py-2">{col.toUpperCase()}</th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {sortedInstruments.length === 0 && (
-            <tr>
-              <td colSpan={11} style={{ textAlign: "center", padding: "10px" }}>Loading data or no results...</td>
-            </tr>
-          )}
-          {sortedInstruments.map((data) => (
-            <tr key={data.ic}>
-              <td style={{ border: "1px solid #ccc", padding: "8px" }}>{data.fn}</td>
-              <td style={{ border: "1px solid #ccc", padding: "8px" }}>{data.ic}</td>
-              <td style={{ border: "1px solid #ccc", padding: "8px", color: priceColor(data) }}>{data.lp}</td>
-              <td style={{ border: "1px solid #ccc", padding: "8px", color: volumeColor(data.v) }}>{data.v}</td>
-              <td style={{ border: "1px solid #ccc", padding: "8px" }}>{data.vw}</td>
+          {liveData.map((d, idx) => (
+            <tr key={idx} className="border-b border-gray-700">
+              {columns.map((col) => {
+                let value = d[col] !== undefined ? d[col] : "-";
 
-              {/* Bid and Ask with mini bars */}
-              <td style={{ border: "1px solid #ccc", padding: "8px" }}>
-                {data.bp}
-                <div style={barStyle(data.bq)}></div>
-              </td>
-              <td style={{ border: "1px solid #ccc", padding: "8px" }}>{data.bq}</td>
-              <td style={{ border: "1px solid #ccc", padding: "8px" }}>
-                {data.ak}
-                <div style={askBarStyle(data.aq)}></div>
-              </td>
-              <td style={{ border: "1px solid #ccc", padding: "8px" }}>{data.aq}</td>
+                if (col === "last" || col === "chg") {
+                  return (
+                    <td key={col} className={`px-4 py-2 font-semibold ${getPriceColor(d)}`}>
+                      {value}
+                    </td>
+                  );
+                }
 
-              <td style={{ border: "1px solid #ccc", padding: "8px", color: priceColor(data) }}>{data.d}</td>
-              <td style={{ border: "1px solid #ccc", padding: "8px", color: priceColor(data) }}>{data.cg}</td>
+                if (col === "volume" && value > 10000) {
+                  return (
+                    <td key={col} className="px-4 py-2 text-yellow-300 font-bold">
+                      {value}
+                    </td>
+                  );
+                }
+
+                if (col === "trend") {
+                  return (
+                    <td key={col} className="px-4 py-2 w-24">
+                      <Sparklines data={d.trend || []} svgWidth={100} svgHeight={30}>
+                        <SparklinesLine color={d.trend?.[d.trend.length - 1] > d.trend?.[0] ? "#22c55e" : "#ef4444"} />
+                      </Sparklines>
+                    </td>
+                  );
+                }
+
+                return (
+                  <td key={col} className="px-4 py-2 text-white">{value}</td>
+                );
+              })}
             </tr>
           ))}
         </tbody>
@@ -142,4 +146,4 @@ const DSEXLiveTable = () => {
   );
 };
 
-export default DSEXLiveTable;
+export default DSEXLiveData;
