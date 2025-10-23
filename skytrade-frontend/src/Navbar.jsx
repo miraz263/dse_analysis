@@ -16,6 +16,7 @@ const Navbar = () => {
     { path: "/chart", label: "Chart" },
     { path: "/live", label: "Live Data" },
     { path: "/trade-change", label: "Trade Change" },
+    { path: "/PricePositionChart", label: "PricePositionChart" },
     { path: "/market-depth", label: "Market Depth" }, // New link
   ];
 

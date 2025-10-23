@@ -5,6 +5,7 @@ import Dashboard from "./Dashboard";
 import DSEXChart from "./DSEXChart";
 import DSEXLiveData from "./DSEXLiveData";
 import TradeChangeGraph from "./TradeChangeGraph";
+import PricePositionChart from "./PricePositionChart";
 import MarketDepth from "./MarketDepth"; // Import MarketDepth
 
 const App = () => {
@@ -21,6 +22,7 @@ const App = () => {
         <Route path="/chart" element={<DSEXChart />} />
         <Route path="/live" element={<DSEXLiveData />} />
         <Route path="/trade-change" element={<TradeChangeGraph />} />
+        <Route path="/PricePositionChart" element={<PricePositionChart/>} />
         <Route path="/market-depth" element={<MarketDepth />} />
 
         {/* 404 fallback */}
